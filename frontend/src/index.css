@@ -167,3 +167,13 @@ body {
 .clock-actions { display: flex; gap: 10px; margin-left: auto; }
 .clock-actions .btn-primary, .clock-actions .btn-ghost { min-width: 88px; }
 .clock-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ---------- 휴가 신청 폼 ---------- */
+.leave-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.leave-form select, .leave-form input {
+  padding: 9px 11px; font: inherit; border: 1px solid var(--color-border);
+  border-radius: 8px; color: var(--color-text); background: #fff;
+}
+.leave-form input[type="text"] { flex: 1; min-width: 160px; }
+.leave-form .btn-primary { margin: 0; }
+.leave-form input:disabled { background: var(--color-bg); opacity: 0.6; }

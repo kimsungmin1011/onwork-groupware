@@ -23,6 +23,12 @@ public enum ErrorCode {
     ALREADY_PROCESSED(HttpStatus.BAD_REQUEST, "이미 처리된 요청입니다"),
     CANNOT_SELF_APPROVE(HttpStatus.BAD_REQUEST, "본인이 요청한 건은 직접 승인할 수 없습니다"),
 
+    // Leave
+    LEAVE_INSUFFICIENT_BALANCE(HttpStatus.BAD_REQUEST, "잔여 휴가일수가 부족합니다"),
+    LEAVE_OVERLAP(HttpStatus.BAD_REQUEST, "이미 신청한 기간과 중복됩니다"),
+    LEAVE_INVALID_PERIOD(HttpStatus.BAD_REQUEST, "휴가 기간이 올바르지 않습니다"),
+    LEAVE_BALANCE_NOT_FOUND(HttpStatus.BAD_REQUEST, "해당 휴가 잔여 정보가 없습니다"),
+
     // 공통
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "처리 중 오류가 발생했습니다");
 

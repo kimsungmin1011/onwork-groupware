@@ -13,6 +13,9 @@ public class NotificationService {
     public static final String HR_CHANGE_REQUESTED = "HR_CHANGE_REQUESTED";
     public static final String HR_CHANGE_APPROVED = "HR_CHANGE_APPROVED";
     public static final String HR_CHANGE_REJECTED = "HR_CHANGE_REJECTED";
+    public static final String LEAVE_REQUESTED = "LEAVE_REQUESTED";
+    public static final String LEAVE_APPROVED = "LEAVE_APPROVED";
+    public static final String LEAVE_ON_HOLD = "LEAVE_ON_HOLD";
 
     private final NotificationRepository repository;
 
