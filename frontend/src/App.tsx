@@ -4,6 +4,7 @@ import AppLayout from './components/AppLayout'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import HrPage from './pages/HrPage'
+import AttendancePage from './pages/AttendancePage'
 
 // 모듈 화면 플레이스홀더 (Phase 2~4에서 구현)
 function ModulePlaceholder({ title }: { title: string }) {
@@ -40,7 +41,7 @@ export default function App() {
         path="/attendance"
         element={
           <ProtectedRoute>
-            <ModulePlaceholder title="근태관리" />
+            <AttendancePage />
           </ProtectedRoute>
         }
       />

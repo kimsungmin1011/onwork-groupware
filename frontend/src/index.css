@@ -159,3 +159,11 @@ body {
 .badge.active { background: #dcfce7; color: #166534; }
 .badge.inactive { background: #f3f4f6; color: #6b7280; }
 .badge.resigned { background: #fee2e2; color: #991b1b; }
+
+/* ---------- 근태 ---------- */
+.clock-row { display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
+.clock-stat { display: flex; flex-direction: column; gap: 4px; }
+.clock-stat strong { font-size: 1.4rem; }
+.clock-actions { display: flex; gap: 10px; margin-left: auto; }
+.clock-actions .btn-primary, .clock-actions .btn-ghost { min-width: 88px; }
+.clock-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
