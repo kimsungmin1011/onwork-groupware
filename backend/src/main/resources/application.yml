@@ -2,28 +2,33 @@ spring:
   application:
     name: onwork
   datasource:
-    url: jdbc:postgresql://localhost:5432/onwork
-    username: onwork
-    password: onwork
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/onwork}
+    username: ${SPRING_DATASOURCE_USERNAME:onwork}
+    password: ${SPRING_DATASOURCE_PASSWORD:onwork}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: none          # 스키마는 db/schema.sql이 소유 (Flyway는 Phase 6에서 검토)
+      ddl-auto: none          # 스키마는 db/schema.sql이 소유
     open-in-view: false
     properties:
       hibernate:
         format_sql: true
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
+      ssl:
+        enabled: ${SPRING_DATA_REDIS_SSL_ENABLED:false}
 
 server:
-  port: 8080
+  port: ${PORT:8080}      # Render/Railway는 PORT 환경변수 주입
 
-# JWT 설정 (ADR-SYS-002) — secret은 운영에서 환경변수로 override
+# OnWork 앱 설정 — 운영은 환경변수로 override
 onwork:
   jwt:
-    secret: "dev-only-onwork-jwt-secret-please-override-with-256bit-key-0123456789"
-    access-token-validity-minutes: 30
-    refresh-token-validity-days: 7
+    secret: ${ONWORK_JWT_SECRET:dev-only-onwork-jwt-secret-please-override-with-256bit-key-0123456789}
+    access-token-validity-minutes: ${ONWORK_JWT_ACCESS_MIN:30}
+    refresh-token-validity-days: ${ONWORK_JWT_REFRESH_DAYS:7}
+  cors:
+    allowed-origins: ${ONWORK_CORS_ORIGINS:http://localhost:5173,http://localhost:5174}

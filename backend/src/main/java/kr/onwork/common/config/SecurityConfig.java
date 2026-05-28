@@ -86,11 +86,17 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    /** 개발용 CORS — React dev 서버(5173) 허용. 운영 도메인은 환경별로 조정. */
+    /**
+     * CORS — onwork.cors.allowed-origins(콤마 구분) 환경변수로 제어.
+     * 로컬: localhost:5173/5174 / 운영: Vercel 도메인. ONWORK_CORS_ORIGINS=https://onwork-xxx.vercel.app
+     */
     @Bean
-    org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
+    org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource(
+            @org.springframework.beans.factory.annotation.Value("${onwork.cors.allowed-origins:http://localhost:5173,http://localhost:5174}")
+            String allowedOrigins) {
         var config = new org.springframework.web.cors.CorsConfiguration();
-        config.setAllowedOrigins(java.util.List.of("http://localhost:5173", "http://localhost:5174"));
+        config.setAllowedOrigins(java.util.Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim).filter(s -> !s.isEmpty()).toList());
         config.setAllowedMethods(java.util.List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(java.util.List.of("*"));
         var source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
