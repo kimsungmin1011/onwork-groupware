@@ -16,6 +16,9 @@ public record DashboardSummary(
         BigDecimal annualRemaining,
         long unreadNotifications,
         int pendingApprovals,
-        int teamAnomaliesToday
+        int teamAnomaliesToday,
+        int monthWorkDays,
+        int monthLateCount,
+        int monthOvertimeMinutes
 ) {
 }

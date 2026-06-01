@@ -13,6 +13,7 @@ import kr.onwork.hr.dto.EmployeeResponse;
 import kr.onwork.hr.dto.HrBatchProcessRequest;
 import kr.onwork.hr.dto.HrBatchProcessResponse;
 import kr.onwork.hr.dto.ProcessRequest;
+import kr.onwork.hr.dto.SalaryResponse;
 import kr.onwork.hr.service.HrService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -55,8 +56,14 @@ public class HrController {
         return hrService.getEmployee(SecurityUtil.currentPrincipal(), id);
     }
 
-    /** 인사 변경 요청 등록 (입사/수정/퇴사 통합) — 경영지원팀(HR_MANAGER). */
-    @PreAuthorize("hasRole('HR_MANAGER')")
+    /** 내 급여 명세 — 본인만(마이페이지 전용). */
+    @GetMapping("/salary/me")
+    public SalaryResponse mySalary() {
+        return hrService.mySalary(SecurityUtil.currentPrincipal());
+    }
+
+    /** 인사 변경 요청 등록 (입사/수정/퇴사 통합) — 경영지원팀(HR_MANAGER) 및 경영진(CEO/VP). */
+    @PreAuthorize("hasAnyRole('CEO','VP','HR_MANAGER')")
     @PostMapping("/change-requests")
     @ResponseStatus(HttpStatus.CREATED)
     public ChangeRequestResponse create(@Valid @RequestBody CreateChangeRequestRequest req) {
@@ -122,8 +129,8 @@ public class HrController {
         return Map.of("total", items.size(), "items", items);
     }
 
-    /** 폼 초기화 시 자동 채번된 임시 사번 (UC-HR-01 정상 흐름 2단계). */
-    @PreAuthorize("hasRole('HR_MANAGER')")
+    /** 폼 초기화 시 자동 채번된 임시 사번 (UC-HR-01 정상 흐름 2단계). HR_MANAGER 및 경영진. */
+    @PreAuthorize("hasAnyRole('CEO','VP','HR_MANAGER')")
     @GetMapping("/change-requests/next-employee-no")
     public Map<String, String> suggestEmployeeNo() {
         return Map.of("employee_no", hrService.suggestNextEmployeeNo());

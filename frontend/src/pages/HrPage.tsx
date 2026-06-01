@@ -30,6 +30,16 @@ interface Department {
   name: string
 }
 
+interface Salary {
+  basePay: number
+  mealAllowance: number
+  transportAllowance: number
+  positionAllowance: number
+  gross: number
+  estimatedNet: number
+  payDay: number
+}
+
 const STATUS_LABEL: Record<string, string> = { ACTIVE: '재직', INACTIVE: '비활성', RESIGNED: '퇴사' }
 
 const EMPTY_FORM = {
@@ -56,6 +66,7 @@ export default function HrPage() {
   const [selectedRequestIds, setSelectedRequestIds] = useState<Set<number>>(new Set())
   const [batchResult, setBatchResult] = useState<string | null>(null)
   const [departments, setDepartments] = useState<Department[]>([])
+  const [salary, setSalary] = useState<Salary | null>(null)
   const [loading, setLoading] = useState(true)
   const [employeeQuery, setEmployeeQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
@@ -77,10 +88,15 @@ export default function HrPage() {
           : undefined)
         setRequests(reqs.data.items)
       }
+      if (isEmployee) {
+        // 급여는 마이페이지(본인)에서만 조회
+        const sal = await api.get<Salary>('/hr/salary/me').catch(() => null)
+        setSalary(sal?.data ?? null)
+      }
     } finally {
       setLoading(false)
     }
-  }, [canSeeRequests, isExec])
+  }, [canSeeRequests, isExec, isEmployee])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -274,6 +290,26 @@ export default function HrPage() {
         </section>
       )}
 
+      {isEmployee && salary && (
+        <section className="card-block service-panel" data-testid="my-salary">
+          <div className="panel-heading">
+            <div>
+              <h2>급여 정보</h2>
+              <p>마이페이지에서만 확인할 수 있는 개인 급여 명세입니다. (매월 {salary.payDay}일 지급)</p>
+            </div>
+          </div>
+          <dl className="detail-list profile-list">
+            <div><dt>기본급</dt><dd>{salary.basePay.toLocaleString()}원</dd></div>
+            <div><dt>식대</dt><dd>{salary.mealAllowance.toLocaleString()}원</dd></div>
+            <div><dt>교통비</dt><dd>{salary.transportAllowance.toLocaleString()}원</dd></div>
+            <div><dt>직책수당</dt><dd>{salary.positionAllowance.toLocaleString()}원</dd></div>
+            <div><dt>세전 합계</dt><dd><strong>{salary.gross.toLocaleString()}원</strong></dd></div>
+            <div><dt>실수령액(추정)</dt><dd><strong>{salary.estimatedNet.toLocaleString()}원</strong></dd></div>
+          </dl>
+          <p className="muted small">※ 실수령액은 4대보험·소득세 약 9% 공제를 가정한 추정치입니다.</p>
+        </section>
+      )}
+
       {canSeeRequests && (
         <section className="card-block service-panel" data-testid="hr-inbox">
           <div className="approvals-header">
@@ -330,12 +366,12 @@ export default function HrPage() {
         </section>
       )}
 
-      {isHrManager && (
+      {(isHrManager || isExec) && (
         <section className="card-block service-panel" data-testid="hire-section">
           <div className="approvals-header">
             <div>
               <h2 className="section-title">신규 입사 등록</h2>
-              <p className="muted small">임시저장 없이 PENDING 요청으로 경영진에게 전달됩니다.</p>
+              <p className="muted small">{isExec ? '신규 입사 요청을 등록합니다. 경영진 결재함에서 승인 시 계정이 생성됩니다.' : '임시저장 없이 PENDING 요청으로 경영진에게 전달됩니다.'}</p>
             </div>
             {!showForm && (
               <button className="btn-primary" onClick={openNewForm} data-testid="open-hire-form">

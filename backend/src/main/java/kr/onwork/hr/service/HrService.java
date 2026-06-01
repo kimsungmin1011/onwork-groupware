@@ -23,6 +23,7 @@ import kr.onwork.hr.domain.ChangeType;
 import kr.onwork.hr.domain.EmployeeChangeHistory;
 import kr.onwork.hr.domain.HrChangeRequest;
 import kr.onwork.hr.domain.RequestStatus;
+import kr.onwork.hr.domain.Salary;
 import kr.onwork.hr.dto.ChangeRequestResponse;
 import kr.onwork.hr.dto.CreateChangeRequestRequest;
 import kr.onwork.hr.dto.DepartmentResponse;
@@ -30,8 +31,10 @@ import kr.onwork.hr.dto.EmployeeResponse;
 import kr.onwork.hr.dto.HrBatchProcessRequest;
 import kr.onwork.hr.dto.HrBatchProcessResponse;
 import kr.onwork.hr.dto.ProcessRequest;
+import kr.onwork.hr.dto.SalaryResponse;
 import kr.onwork.hr.repository.EmployeeChangeHistoryRepository;
 import kr.onwork.hr.repository.HrChangeRequestRepository;
+import kr.onwork.hr.repository.SalaryRepository;
 import kr.onwork.notification.service.NotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,6 +61,7 @@ public class HrService {
     private final PasswordEncoder passwordEncoder;
     private final NotificationService notificationService;
     private final ApprovalRoutingService approvalRoutingService;
+    private final SalaryRepository salaryRepository;
 
     public HrService(HrChangeRequestRepository changeRequestRepository,
                      EmployeeChangeHistoryRepository historyRepository,
@@ -67,7 +71,8 @@ public class HrService {
                      WorkGroupRepository workGroupRepository,
                      PasswordEncoder passwordEncoder,
                      NotificationService notificationService,
-                     ApprovalRoutingService approvalRoutingService) {
+                     ApprovalRoutingService approvalRoutingService,
+                     SalaryRepository salaryRepository) {
         this.changeRequestRepository = changeRequestRepository;
         this.historyRepository = historyRepository;
         this.userRepository = userRepository;
@@ -77,6 +82,15 @@ public class HrService {
         this.passwordEncoder = passwordEncoder;
         this.notificationService = notificationService;
         this.approvalRoutingService = approvalRoutingService;
+        this.salaryRepository = salaryRepository;
+    }
+
+    /** 내 급여 명세(마이페이지 전용). 본인 데이터만 조회. */
+    @Transactional(readOnly = true)
+    public SalaryResponse mySalary(AuthPrincipal principal) {
+        Salary salary = salaryRepository.findByUserId(principal.userId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "급여 정보가 없습니다"));
+        return SalaryResponse.from(salary);
     }
 
     // ---------------------------------------------------------------- 요청 등록 (즉시 PENDING)

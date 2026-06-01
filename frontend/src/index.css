@@ -497,6 +497,31 @@ body {
   font-weight: 700;
   color: var(--color-primary);
 }
+/* 오늘 근무 상태 카드 제거 시 단일 열로 */
+.dashboard-hero.solo { grid-template-columns: 1fr; }
+/* 이번 달 근태 요약 */
+.month-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.month-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: #fbfdff;
+}
+.month-summary .ms-label { font-size: 0.82rem; color: var(--color-text-muted); }
+.month-summary .ms-value { font-size: 1.5rem; font-weight: 800; color: var(--color-text); }
+/* 오늘의 일정 행 */
+.schedule-row .when {
+  min-width: 56px;
+  font-weight: 800;
+  color: var(--color-primary);
+}
 .dashboard-secondary-link {
   border: 1px solid rgba(100, 116, 139, 0.28);
   background: rgba(255, 255, 255, 0.74);

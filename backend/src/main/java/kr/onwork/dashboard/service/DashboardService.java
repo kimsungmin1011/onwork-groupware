@@ -2,8 +2,11 @@ package kr.onwork.dashboard.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import kr.onwork.attendance.domain.AnomalyType;
 import kr.onwork.attendance.domain.DailyWorkRecord;
 import kr.onwork.attendance.repository.DailyWorkRecordRepository;
+import kr.onwork.attendance.repository.WorkAnomalyRepository;
 import kr.onwork.attendance.service.AttendanceService;
 import kr.onwork.common.domain.Role;
 import kr.onwork.common.domain.User;
@@ -25,6 +28,7 @@ public class DashboardService {
     private static final long ANNUAL_TYPE_ID = 1L;
 
     private final DailyWorkRecordRepository recordRepository;
+    private final WorkAnomalyRepository anomalyRepository;
     private final LeaveBalanceRepository balanceRepository;
     private final HrChangeRequestRepository hrRepository;
     private final NotificationService notificationService;
@@ -33,6 +37,7 @@ public class DashboardService {
     private final UserRepository userRepository;
 
     public DashboardService(DailyWorkRecordRepository recordRepository,
+                            WorkAnomalyRepository anomalyRepository,
                             LeaveBalanceRepository balanceRepository,
                             HrChangeRequestRepository hrRepository,
                             NotificationService notificationService,
@@ -40,6 +45,7 @@ public class DashboardService {
                             AttendanceService attendanceService,
                             UserRepository userRepository) {
         this.recordRepository = recordRepository;
+        this.anomalyRepository = anomalyRepository;
         this.balanceRepository = balanceRepository;
         this.hrRepository = hrRepository;
         this.notificationService = notificationService;
@@ -73,6 +79,20 @@ public class DashboardService {
                 + (exec ? hrRepository.findByStatusOrderByIdDesc(RequestStatus.PENDING).size() : 0);
         int teamAnomalies = managerUp ? attendanceService.listAnomalies(principal, today).size() : 0;
 
+        // 이번 달 근태 요약: 출근일 / 지각 횟수 / 초과 근무(분)
+        LocalDate monthStart = today.withDayOfMonth(1);
+        LocalDate monthEnd = monthStart.plusMonths(1).minusDays(1);
+        List<DailyWorkRecord> monthRecords =
+                recordRepository.findByUserIdAndDateBetweenOrderByDateDesc(uid, monthStart, monthEnd);
+        int monthWorkDays = (int) monthRecords.stream().filter(DailyWorkRecord::hasClockIn).count();
+        int monthOvertime = monthRecords.stream().mapToInt(DailyWorkRecord::getOvertimeMinutes).sum();
+        int monthLate = 0;
+        List<Long> recordIds = monthRecords.stream().map(DailyWorkRecord::getId).toList();
+        if (!recordIds.isEmpty()) {
+            monthLate = (int) anomalyRepository.findByDailyWorkRecordIdIn(recordIds).stream()
+                    .filter(a -> a.getAnomalyType() == AnomalyType.LATE).count();
+        }
+
         return new DashboardSummary(
                 me != null ? me.getName() : "",
                 principal.role().name(),
@@ -83,7 +103,10 @@ public class DashboardService {
                 total, used, remaining,
                 notificationService.unreadCount(uid),
                 pending,
-                teamAnomalies
+                teamAnomalies,
+                monthWorkDays,
+                monthLate,
+                monthOvertime
         );
     }
 }
