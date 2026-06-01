@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import kr.onwork.approval.service.ApprovalRoutingService;
 import kr.onwork.common.domain.Role;
 import kr.onwork.common.domain.User;
+import kr.onwork.common.domain.UserStatus;
 import kr.onwork.common.error.BusinessException;
 import kr.onwork.common.error.ErrorCode;
 import kr.onwork.common.repository.UserRepository;
@@ -154,27 +155,19 @@ public class LeaveService {
 
     @Transactional(readOnly = true)
     public List<LeaveRequestResponse> inbox(AuthPrincipal principal) {
-        List<Long> targetUserIds;
-        if (principal.role() == Role.CEO || principal.role() == Role.VP) {
-            targetUserIds = userRepository.search(null, null, null).stream().map(User::getId).toList();
-        } else {
-            List<Long> deptIds = approverRepository
-                    .findByApproverIdOrDelegateId(principal.userId(), principal.userId()).stream()
-                    .filter(la -> la.activeApproverId().equals(principal.userId()))
-                    .map(LeaveApprover::getDepartmentId).toList();
-            if (deptIds.isEmpty()) {
-                return List.of();
-            }
-            targetUserIds = deptIds.stream()
-                    .flatMap(d -> userRepository.search(d, null, null).stream())
-                    .map(User::getId).toList();
-        }
-        if (targetUserIds.isEmpty()) {
+        // ADR-LVE-001: 신청 건마다 현재 유효 결재자를 실시간 산정해, 내가 결재자인 PENDING 건만 노출.
+        // 팀장 부재 시 대행자(경영지원팀장), 팀장·대행자 모두 부재 시 경영진이 결재자가 된다.
+        List<LeaveRequest> mine = requestRepository.findByStatusOrderByIdDesc(LeaveStatus.PENDING).stream()
+                .filter(r -> !r.getUserId().equals(principal.userId()))
+                .filter(r -> isActiveApproverFor(principal, r.getUserId()))
+                .toList();
+        if (mine.isEmpty()) {
             return List.of();
         }
-        Map<Long, String> nameById = userRepository.findAllById(targetUserIds).stream()
+        Map<Long, String> nameById = userRepository.findAllById(
+                        mine.stream().map(LeaveRequest::getUserId).distinct().toList()).stream()
                 .collect(Collectors.toMap(User::getId, User::getName));
-        return requestRepository.findByUserIdInAndStatusOrderByIdDesc(targetUserIds, LeaveStatus.PENDING).stream()
+        return mine.stream()
                 .map(r -> LeaveRequestResponse.of(r, nameById.getOrDefault(r.getUserId(), "?")))
                 .toList();
     }
@@ -191,12 +184,11 @@ public class LeaveService {
             throw new BusinessException(ErrorCode.CANNOT_SELF_APPROVE);
         }
         LeaveApprover la = approverOf(request.getUserId());
-        boolean exec = principal.role() == Role.CEO || principal.role() == Role.VP;
-        boolean isActiveApprover = la != null && la.activeApproverId().equals(principal.userId());
-        if (!exec && !isActiveApprover) {
+        if (!isActiveApproverFor(principal, request.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "이 휴가를 결재할 권한이 없습니다");
         }
-        boolean delegated = la != null && !principal.userId().equals(la.getApproverId());
+        // 원래 팀장이 아닌 사람(대행자·경영진)이 처리하면 대행 결재로 표시
+        boolean delegated = la == null || !principal.userId().equals(la.getApproverId());
 
         if (req.action() == LeaveProcessRequest.Action.ON_HOLD) {
             if (req.reason() == null || req.reason().isBlank()) {
@@ -358,17 +350,54 @@ public class LeaveService {
         return approverRepository.findByDepartmentId(requester.getDepartment().getId()).orElse(null);
     }
 
+    /**
+     * ADR-LVE-001: 현재 유효 결재자를 실시간 산정.
+     * 팀장 → (팀장 부재) 대행자(경영지원팀장) → (대행자도 부재) 경영진(CEO/VP).
+     * 부재 여부는 오늘자 승인된 휴가 유무로 자동 판단(is_absent 플래그 미사용).
+     */
     private Long resolveActiveApprover(Long requesterId) {
         LeaveApprover la = approverOf(requesterId);
-        return la != null ? la.activeApproverId() : null;
+        if (la != null) {
+            if (!isOnLeaveToday(la.getApproverId())) {
+                return la.getApproverId();
+            }
+            if (la.getDelegateId() != null && !isOnLeaveToday(la.getDelegateId())) {
+                return la.getDelegateId();
+            }
+        }
+        return anExecutiveId();   // 팀장·대행자 모두 부재(또는 부서 미지정) → 경영진 배정
+    }
+
+    /** principal이 해당 신청의 현재 유효 결재자인지(자동 부재 반영). */
+    private boolean isActiveApproverFor(AuthPrincipal principal, Long requesterId) {
+        LeaveApprover la = approverOf(requesterId);
+        if (la != null) {
+            if (!isOnLeaveToday(la.getApproverId())) {
+                return principal.userId().equals(la.getApproverId());
+            }
+            if (la.getDelegateId() != null && !isOnLeaveToday(la.getDelegateId())) {
+                return principal.userId().equals(la.getDelegateId());
+            }
+        }
+        // 팀장·대행자 모두 부재(또는 부서 없음) → 경영진이 유효 결재자
+        return principal.role() == Role.CEO || principal.role() == Role.VP;
+    }
+
+    /** 오늘 승인된 휴가로 부재 중인가. */
+    private boolean isOnLeaveToday(Long userId) {
+        return userId != null && requestRepository.countActiveLeaveOn(userId, LocalDate.now()) > 0;
+    }
+
+    /** 에스컬레이션 대상 경영진 1인(VP 우선, 없으면 CEO). */
+    private Long anExecutiveId() {
+        List<User> execs = userRepository.findByRoleInAndStatus(List.of(Role.VP, Role.CEO), UserStatus.ACTIVE);
+        return execs.stream().filter(u -> u.getRole() == Role.VP).findFirst()
+                .or(() -> execs.stream().findFirst())
+                .map(User::getId).orElse(null);
     }
 
     private void requireLeaveApprover(AuthPrincipal principal, Long requesterId) {
-        if (principal.role() == Role.CEO || principal.role() == Role.VP) {
-            return;
-        }
-        LeaveApprover la = approverOf(requesterId);
-        if (la != null && la.activeApproverId().equals(principal.userId())) {
+        if (isActiveApproverFor(principal, requesterId)) {
             return;
         }
         throw new BusinessException(ErrorCode.FORBIDDEN, "이 휴가를 취소할 권한이 없습니다");

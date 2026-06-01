@@ -65,7 +65,12 @@ export default function AttendancePage() {
   const [overtimeMine, setOvertimeMine] = useState<OvertimeRequest[]>([])
   const [overtimeInbox, setOvertimeInbox] = useState<OvertimeRequest[]>([])
   const [confirmForms, setConfirmForms] = useState<Record<number, { anomalyType: string; overtimeApproved: boolean }>>({})
-  const [overtimeForm, setOvertimeForm] = useState({ requestDate: '', expectedStartAt: '', expectedEndAt: '', reason: '' })
+  const [overtimeForm, setOvertimeForm] = useState(() => ({
+    date: new Date().toLocaleDateString('en-CA'),   // 오늘(YYYY-MM-DD) 기본값
+    startTime: '18:00',
+    endTime: '20:00',
+    reason: '',
+  }))
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7))
   const [monthlyResult, setMonthlyResult] = useState<MonthlyCloseResult | null>(null)
   const [now, setNow] = useState(() => new Date())
@@ -125,14 +130,20 @@ export default function AttendancePage() {
 
   async function submitOvertime(e: FormEvent) {
     e.preventDefault()
-    const start = new Date(overtimeForm.expectedStartAt)
+    const { date, startTime, endTime, reason } = overtimeForm
+    if (!date || !startTime || !endTime) return
+    if (endTime <= startTime) {
+      alert('종료 시간은 시작 시간보다 늦어야 합니다')
+      return
+    }
+    // 날짜 1개 + 시작/종료 시간 → 백엔드가 받는 타임스탬프(date+time)로 합성
     await api.post('/attendance/overtime-requests', {
-      requestDate: overtimeForm.requestDate || start.toISOString().slice(0, 10),
-      expectedStartAt: overtimeForm.expectedStartAt,
-      expectedEndAt: overtimeForm.expectedEndAt,
-      reason: overtimeForm.reason,
+      requestDate: date,
+      expectedStartAt: `${date}T${startTime}`,
+      expectedEndAt: `${date}T${endTime}`,
+      reason,
     })
-    setOvertimeForm({ requestDate: '', expectedStartAt: '', expectedEndAt: '', reason: '' })
+    setOvertimeForm({ date, startTime: '18:00', endTime: '20:00', reason: '' })
     await load()
   }
 
@@ -224,15 +235,29 @@ export default function AttendancePage() {
             <div className="panel-heading">
               <div>
                 <h2>시간외 신청</h2>
-                <p>예상 시작/종료 시각과 사유를 남기면 결재함으로 전달됩니다.</p>
+                <p>근무 일자와 시작·종료 시간을 선택하면 결재함으로 전달됩니다.</p>
               </div>
             </div>
             <form className="pro-form" onSubmit={submitOvertime}>
-              <input type="date" value={overtimeForm.requestDate} onChange={(e) => setOvertimeForm({ ...overtimeForm, requestDate: e.target.value })} />
-              <input type="datetime-local" required value={overtimeForm.expectedStartAt} onChange={(e) => setOvertimeForm({ ...overtimeForm, expectedStartAt: e.target.value })} />
-              <input type="datetime-local" required value={overtimeForm.expectedEndAt} onChange={(e) => setOvertimeForm({ ...overtimeForm, expectedEndAt: e.target.value })} />
-              <input type="text" required placeholder="신청 사유" value={overtimeForm.reason} onChange={(e) => setOvertimeForm({ ...overtimeForm, reason: e.target.value })} />
-              <button className="btn-primary" type="submit">신청</button>
+              <label className="field" style={{ gridColumn: '1 / -1' }}>
+                <span>근무 일자</span>
+                <input type="date" required value={overtimeForm.date}
+                       onChange={(e) => setOvertimeForm({ ...overtimeForm, date: e.target.value })} />
+              </label>
+              <label className="field">
+                <span>시작 시간</span>
+                <input type="time" required value={overtimeForm.startTime}
+                       onChange={(e) => setOvertimeForm({ ...overtimeForm, startTime: e.target.value })} />
+              </label>
+              <label className="field">
+                <span>종료 시간</span>
+                <input type="time" required value={overtimeForm.endTime}
+                       onChange={(e) => setOvertimeForm({ ...overtimeForm, endTime: e.target.value })} />
+              </label>
+              <input type="text" required placeholder="신청 사유" style={{ gridColumn: '1 / -1' }}
+                     value={overtimeForm.reason}
+                     onChange={(e) => setOvertimeForm({ ...overtimeForm, reason: e.target.value })} />
+              <button className="btn-primary" type="submit" style={{ gridColumn: '1 / -1' }}>신청</button>
             </form>
           </div>
 

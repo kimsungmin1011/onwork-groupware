@@ -15,6 +15,17 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
 
     List<LeaveRequest> findByUserIdInAndStatusOrderByIdDesc(List<Long> userIds, LeaveStatus status);
 
+    List<LeaveRequest> findByStatusOrderByIdDesc(LeaveStatus status);
+
+    /** ADR-LVE-001: 해당 사용자가 특정 일자에 승인된 휴가로 부재 중인지 판단. */
+    @Query("""
+            select count(r) from LeaveRequest r
+            where r.userId = :userId
+              and r.status = kr.onwork.leave.domain.LeaveStatus.APPROVED
+              and r.startDate <= :date and r.endDate >= :date
+            """)
+    long countActiveLeaveOn(@Param("userId") Long userId, @Param("date") LocalDate date);
+
     /** 기간 중복 검사 — 동일 사용자의 PENDING/APPROVED 신청과 겹치는지. */
     @Query("""
             select count(r) from LeaveRequest r

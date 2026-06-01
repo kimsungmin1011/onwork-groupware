@@ -68,7 +68,7 @@ public class LeaveCanonicalController {
         return leaveService.process(SecurityUtil.currentPrincipal(), id, req);
     }
 
-    @PreAuthorize("hasRole('VP')")
+    @PreAuthorize("hasAnyRole('CEO','VP')")   // 경영진(CEO/VP)만 보상휴가 부여
     @PostMapping("/leave-grants")
     public LeaveGrantResponse grant(@Valid @RequestBody LeaveGrantRequest req) {
         return leaveService.grantCompLeave(SecurityUtil.currentPrincipal(), req);

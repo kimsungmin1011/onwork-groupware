@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import AppLayout from '../components/AppLayout'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { isApprover } from '../lib/roles'
+import { isApprover, isExecutive } from '../lib/roles'
 
 interface Balance {
   leaveTypeCode: string
@@ -21,6 +21,11 @@ interface LeaveReq {
   holdReason: string | null
   delegated: boolean
 }
+interface Employee {
+  id: number
+  name: string
+  departmentName?: string | null
+}
 
 const STATUS_LABEL: Record<string, string> = {
   PENDING: '대기', APPROVED: '승인', ON_HOLD: '보류', CANCELLED: '취소',
@@ -38,6 +43,7 @@ function balanceUsePercent(balance?: Balance) {
 export default function LeavePage() {
   const { user } = useAuth()
   const canApprove = isApprover(user?.role)
+  const isExec = isExecutive(user?.role)   // 경영진(CEO/VP)만 보상휴가 부여
 
   const [balances, setBalances] = useState<Balance[]>([])
   const [mine, setMine] = useState<LeaveReq[]>([])
@@ -45,6 +51,9 @@ export default function LeavePage() {
   const [detail, setDetail] = useState<LeaveReq | null>(null)
   const [form, setForm] = useState({ leaveTypeId: 1, startDate: '', endDate: '', reason: '' })
   const [error, setError] = useState('')
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [grantForm, setGrantForm] = useState({ userId: '', days: '1', reason: '' })
+  const [grantMsg, setGrantMsg] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const [b, m] = await Promise.all([
@@ -57,7 +66,11 @@ export default function LeavePage() {
       const i = await api.get<{ items: LeaveReq[] }>('/leave/inbox')
       setInbox(i.data.items)
     }
-  }, [canApprove])
+    if (isExec) {
+      const e = await api.get<{ items: Employee[] }>('/hr/employees')
+      setEmployees(e.data.items)
+    }
+  }, [canApprove, isExec])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -98,6 +111,30 @@ export default function LeavePage() {
   async function cancel(id: number) {
     await api.patch(`/leave-requests/${id}/cancel`)
     await load()
+  }
+
+  // 경영진 보상휴가 부여 (UC-LEAVE-03, POST /leave-grants, VP+)
+  async function submitGrant(e: FormEvent) {
+    e.preventDefault()
+    setGrantMsg(null)
+    const days = Number(grantForm.days)
+    if (!grantForm.userId || !(days >= 0.5)) {
+      setGrantMsg('대상 직원과 0.5일 이상의 일수를 입력하세요')
+      return
+    }
+    try {
+      const target = employees.find((emp) => String(emp.id) === grantForm.userId)
+      await api.post('/leave-grants', {
+        userIds: [Number(grantForm.userId)],
+        days,
+        reason: grantForm.reason || null,
+      })
+      setGrantMsg(`${target?.name ?? '직원'}에게 보상휴가 ${days}일 부여 완료`)
+      setGrantForm({ userId: '', days: '1', reason: '' })
+      await load()
+    } catch (err) {
+      setGrantMsg((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '부여 실패')
+    }
   }
 
   const annual = balances.find((b) => b.leaveTypeCode === 'ANNUAL')
@@ -203,6 +240,43 @@ export default function LeavePage() {
             </div>
           </div>
         </section>
+
+      {isExec && (
+        <section className="card-block service-panel" data-testid="comp-grant">
+          <div className="panel-heading">
+            <div>
+              <h2>보상휴가 부여</h2>
+              <p>경영진 전용 — 선택한 직원에게 보상휴가를 즉시 부여합니다(결재 불필요).</p>
+            </div>
+          </div>
+          <form className="pro-form" onSubmit={submitGrant}>
+            <label className="field" style={{ gridColumn: '1 / -1' }}>
+              <span>대상 직원</span>
+              <select required value={grantForm.userId}
+                      onChange={(e) => setGrantForm({ ...grantForm, userId: e.target.value })}>
+                <option value="">직원 선택</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name}{emp.departmentName ? ` · ${emp.departmentName}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>부여 일수</span>
+              <input type="number" min="0.5" step="0.5" required value={grantForm.days}
+                     onChange={(e) => setGrantForm({ ...grantForm, days: e.target.value })} />
+            </label>
+            <label className="field">
+              <span>사유 (선택)</span>
+              <input type="text" placeholder="예: 휴일 근무 보상" value={grantForm.reason}
+                     onChange={(e) => setGrantForm({ ...grantForm, reason: e.target.value })} />
+            </label>
+            <button className="btn-primary" type="submit" style={{ gridColumn: '1 / -1' }}>보상휴가 부여</button>
+          </form>
+          {grantMsg && <p className="toast-line">{grantMsg}</p>}
+        </section>
+      )}
 
       {canApprove && (
         <section className="card-block service-panel" data-testid="leave-inbox">

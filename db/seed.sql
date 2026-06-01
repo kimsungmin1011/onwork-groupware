@@ -61,12 +61,14 @@ INSERT INTO attendance_settings (id, grace_in_minutes, grace_out_minutes, late_t
 VALUES (1, 10, 10, 3, FALSE, 1);
 INSERT INTO leave_settings (id, annual_rollover, comp_expire_warning_days) VALUES (1, FALSE, 7);
 
--- 팀별 승인자/대행자 (팀장 1차 → 대행자, ADR-003)
+-- 팀별 승인자/대행자 (팀장 1차 → 대행자, ADR-LVE-001)
+-- 대행자는 경영지원팀장(박지수, id 3). 경영지원팀은 다른 HR(송미래, id 4)이 대행.
+-- 팀장·대행자 모두 부재 시 경영진(CEO/VP)으로 자동 에스컬레이션(서비스 로직).
 INSERT INTO leave_approvers (department_id, approver_id, delegate_id, is_absent) VALUES
   (1, 3,  4,  FALSE),
-  (2, 5,  6,  FALSE),
-  (3, 11, 12, FALSE),
-  (4, 17, 18, FALSE);
+  (2, 5,  3,  FALSE),
+  (3, 11, 3,  FALSE),
+  (4, 17, 3,  FALSE);
 
 -- 연차 잔여(샘플): 전 직원 ANNUAL 20일, 올해 귀속
 INSERT INTO leave_balances (user_id, leave_type_id, total_days, used_days, year)
