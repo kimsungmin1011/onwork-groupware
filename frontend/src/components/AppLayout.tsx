@@ -93,7 +93,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   async function onDemoReset() {
     if (resetting) return
     const ok = window.confirm(
-      '시연 초기화\n\n· 시연 중 추가/변경된 데이터를 모두 지우고 기본 더미데이터로 되돌립니다.\n· 개발팀장·기획팀장을 오늘 휴가 상태로 만듭니다(대행 결재 시연용).\n\n진행할까요?',
+      '시연 초기화\n\n· 시연 중 추가/변경된 데이터를 모두 지우고 기본 더미데이터로 되돌립니다.\n· 개발팀장·영업팀장을 오늘 휴가 상태로 만듭니다(대행 결재 시연용).\n\n진행할까요?',
     )
     if (!ok) return
     setResetting(true)
@@ -185,7 +185,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           className="sidebar-reset"
           onClick={onDemoReset}
           disabled={resetting}
-          title="시연용 — 더미데이터 초기화 + 개발/기획팀장 휴가 세팅"
+          title="시연용 — 더미데이터 초기화 + 개발/영업팀장 휴가 세팅"
         >
           {resetting ? '초기화 중…' : '⟲ 시연 초기화'}
         </button>

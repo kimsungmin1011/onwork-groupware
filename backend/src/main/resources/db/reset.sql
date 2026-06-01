@@ -1,7 +1,7 @@
 -- OnWork 시연용 초기화 스크립트 (DemoResetService가 트랜잭션으로 실행).
 -- 정책(2026-06-01): 출퇴근·결재·일반 휴가신청 더미는 두지 않는다(깨끗한 상태에서 라이브 시연).
 --   유지: 직원/부서/인증, 연차 잔여(20일), 오늘의 일정, 급여.
---   시연 세팅: 개발팀장(최현준)·기획팀장(한소희)만 오늘 휴가 → 두 팀 사원 휴가신청이
+--   시연 세팅: 개발팀장(최현준)·영업팀장(정수연)만 오늘 휴가 → 두 팀 사원 휴가신청이
 --             대행자 경영지원팀장(박지수)에게 라우팅되는 흐름을 바로 시연.
 -- 순수 SQL만 사용(psql 메타명령 금지). 비밀번호는 전원 'onwork1234!'.
 
@@ -113,14 +113,14 @@ FROM users u
 WHERE u.status = 'ACTIVE'
 ON CONFLICT (user_id) DO NOTHING;
 
--- ============================================================ 3) 시연 시나리오: 개발팀장·기획팀장 오늘 휴가
--- 최현준(5, 개발팀장) / 한소희(17, 기획팀장)을 오늘부터 승인 휴가 → 두 팀 사원의 휴가 신청이
+-- ============================================================ 3) 시연 시나리오: 개발팀장·영업팀장 오늘 휴가
+-- 최현준(5, 개발팀장) / 정수연(11, 영업팀장)을 오늘부터 승인 휴가 → 두 팀 사원의 휴가 신청이
 -- 대행자(경영지원팀장 박지수, id 3)에게 라우팅되는 것을 시연. (그 외 출퇴근/결재/휴가 데이터는 없음.)
 INSERT INTO leave_requests (user_id, leave_balance_id, start_date, end_date, days_used, reason, status, approver_id, approved_at)
 SELECT 5,  id, CURRENT_DATE, CURRENT_DATE + 2, 3.0, '연차 (시연용 — 팀장 부재)', 'APPROVED', 1, NOW()
   FROM leave_balances WHERE user_id=5  AND leave_type_id=1 AND year=2026;
 INSERT INTO leave_requests (user_id, leave_balance_id, start_date, end_date, days_used, reason, status, approver_id, approved_at)
-SELECT 17, id, CURRENT_DATE, CURRENT_DATE + 2, 3.0, '연차 (시연용 — 팀장 부재)', 'APPROVED', 1, NOW()
-  FROM leave_balances WHERE user_id=17 AND leave_type_id=1 AND year=2026;
+SELECT 11, id, CURRENT_DATE, CURRENT_DATE + 2, 3.0, '연차 (시연용 — 팀장 부재)', 'APPROVED', 1, NOW()
+  FROM leave_balances WHERE user_id=11 AND leave_type_id=1 AND year=2026;
 
-UPDATE leave_balances SET used_days = used_days + 3.0 WHERE user_id IN (5, 17) AND leave_type_id=1 AND year=2026;
+UPDATE leave_balances SET used_days = used_days + 3.0 WHERE user_id IN (5, 11) AND leave_type_id=1 AND year=2026;
