@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import AppLayout from '../components/AppLayout'
+import ApproverCell from '../components/ApproverCell'
 import { api } from '../lib/api'
+import type { Approver } from '../lib/approver'
 import { useAuth } from '../lib/auth'
 import { isApprover, isExecutive } from '../lib/roles'
 
@@ -20,6 +22,7 @@ interface LeaveReq {
   status: string
   holdReason: string | null
   delegated: boolean
+  approver?: Approver | null
 }
 interface Employee {
   id: number
@@ -333,13 +336,14 @@ export default function LeavePage() {
           {inbox.length === 0 ? <div className="empty-state">대기 중인 휴가 신청이 없습니다.</div> : (
             <div className="table-shell">
               <table className="data-table">
-                <thead><tr><th>신청자</th><th>기간</th><th>일수</th><th>처리</th></tr></thead>
+                <thead><tr><th>신청자</th><th>기간</th><th>일수</th><th>결재자</th><th>처리</th></tr></thead>
                 <tbody>
                   {inbox.map((r) => (
                     <tr key={r.id} className="clickable-row" onClick={() => setDetail(r)}>
                       <td><strong>{r.userName}</strong></td>
                       <td>{r.startDate} ~ {r.endDate}</td>
                       <td>{r.daysUsed}</td>
+                      <td><ApproverCell status={r.status} approver={r.approver} /></td>
                       <td className="actions" onClick={(event) => event.stopPropagation()}>
                         <button className="btn-sm primary" onClick={() => process(r.id, 'APPROVE')}>승인</button>
                         <button className="btn-sm" onClick={() => process(r.id, 'ON_HOLD')}>보류</button>
@@ -363,7 +367,7 @@ export default function LeavePage() {
         {mine.length === 0 ? <div className="empty-state">신청 내역이 없습니다.</div> : (
           <div className="table-shell">
             <table className="data-table">
-              <thead><tr><th>기간</th><th>일수</th><th>상태</th><th></th></tr></thead>
+              <thead><tr><th>기간</th><th>일수</th><th>상태</th><th>결재자</th><th></th></tr></thead>
               <tbody>
                 {mine.map((r) => (
                   <tr key={r.id}>
@@ -371,9 +375,10 @@ export default function LeavePage() {
                     <td>{r.daysUsed}</td>
                     <td>
                       <span className={'badge ' + (r.status === 'APPROVED' ? 'active' : r.status === 'CANCELLED' ? 'resigned' : 'inactive')}>
-                        {STATUS_LABEL[r.status] ?? r.status}{r.delegated ? ' (대행)' : ''}
+                        {STATUS_LABEL[r.status] ?? r.status}
                       </span>
                     </td>
+                    <td><ApproverCell status={r.status} approver={r.approver} /></td>
                     <td>
                       {(r.status === 'PENDING' || r.status === 'ON_HOLD') && (
                         <button className="btn-sm" onClick={() => cancel(r.id)}>취소</button>
@@ -402,7 +407,7 @@ export default function LeavePage() {
               <div><dt>기간</dt><dd>{detail.startDate} ~ {detail.endDate}</dd></div>
               <div><dt>차감 일수</dt><dd>{detail.daysUsed}일</dd></div>
               <div><dt>상태</dt><dd>{STATUS_LABEL[detail.status] ?? detail.status}</dd></div>
-              <div><dt>대행 여부</dt><dd>{detail.delegated ? '대행 결재' : '일반 결재'}</dd></div>
+              <div><dt>결재자</dt><dd><ApproverCell status={detail.status} approver={detail.approver} /></dd></div>
               <div className="detail-wide"><dt>보류 사유</dt><dd>{detail.holdReason ?? '-'}</dd></div>
               <div className="detail-wide"><dt>처리 후 영향</dt><dd>승인 시 잔여 휴가가 차감되고, 보류 시 신청자에게 사유가 알림으로 전달됩니다.</dd></div>
             </dl>

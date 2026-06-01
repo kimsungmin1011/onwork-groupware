@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import AppLayout from '../components/AppLayout'
+import ApproverCell from '../components/ApproverCell'
 import { api } from '../lib/api'
+import type { Approver } from '../lib/approver'
 import { useAuth } from '../lib/auth'
 import { isApprover } from '../lib/roles'
 
@@ -28,6 +30,7 @@ interface OvertimeRequest {
   reason: string
   status: string
   rejectReason: string | null
+  approver?: Approver | null
 }
 interface MonthlyCloseResult {
   closed: boolean
@@ -278,6 +281,7 @@ export default function AttendancePage() {
                     <div>
                       <strong>{r.requestDate}</strong>
                       <small>{fmtTime(r.expectedStartAt)} ~ {fmtTime(r.expectedEndAt)} · {r.reason}</small>
+                      <ApproverCell status={r.status} approver={r.approver} />
                     </div>
                     <span className={'badge ' + (r.status === 'APPROVED' ? 'active' : r.status === 'REJECTED' ? 'resigned' : 'inactive')}>
                       {STATUS_LABEL[r.status] ?? r.status}
@@ -373,13 +377,14 @@ export default function AttendancePage() {
             {overtimeInbox.length === 0 ? <div className="empty-state">대기 중인 시간외 신청이 없습니다.</div> : (
               <div className="table-shell">
                 <table className="data-table">
-                  <thead><tr><th>신청자</th><th>예상 시간</th><th>사유</th><th>처리</th></tr></thead>
+                  <thead><tr><th>신청자</th><th>예상 시간</th><th>사유</th><th>결재자</th><th>처리</th></tr></thead>
                   <tbody>
                     {overtimeInbox.map((r) => (
                       <tr key={r.id}>
                         <td>{r.userName ?? `사번 ${r.userId}`}</td>
                         <td>{fmtTime(r.expectedStartAt)} ~ {fmtTime(r.expectedEndAt)}</td>
                         <td>{r.reason}</td>
+                        <td><ApproverCell status={r.status} approver={r.approver} /></td>
                         <td className="actions">
                           <button className="btn-sm primary" onClick={() => processOvertime(r.id, 'APPROVE')}>승인</button>
                           <button className="btn-sm" onClick={() => processOvertime(r.id, 'REJECT')}>반려</button>

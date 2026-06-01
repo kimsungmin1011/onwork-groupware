@@ -33,10 +33,13 @@ import kr.onwork.attendance.repository.WorkAnomalyRepository;
 import kr.onwork.common.domain.Role;
 import kr.onwork.common.domain.User;
 import kr.onwork.common.domain.UserStatus;
+import kr.onwork.common.dto.ApproverView;
 import kr.onwork.common.error.BusinessException;
 import kr.onwork.common.error.ErrorCode;
 import kr.onwork.common.repository.UserRepository;
 import kr.onwork.common.security.AuthPrincipal;
+import kr.onwork.common.service.ApproverViewFactory;
+import kr.onwork.leave.repository.LeaveRequestRepository;
 import kr.onwork.notification.service.NotificationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,6 +60,8 @@ public class AttendanceService {
     private final MonthlySummaryRepository monthlySummaryRepository;
     private final NotificationService notificationService;
     private final ApprovalRoutingService approvalRoutingService;
+    private final LeaveRequestRepository leaveRequestRepository;
+    private final ApproverViewFactory approverViewFactory;
 
     public AttendanceService(DailyWorkRecordRepository recordRepository,
                              WorkAnomalyRepository anomalyRepository,
@@ -66,7 +71,9 @@ public class AttendanceService {
                              Clock clock,
                              MonthlySummaryRepository monthlySummaryRepository,
                              NotificationService notificationService,
-                             ApprovalRoutingService approvalRoutingService) {
+                             ApprovalRoutingService approvalRoutingService,
+                             LeaveRequestRepository leaveRequestRepository,
+                             ApproverViewFactory approverViewFactory) {
         this.recordRepository = recordRepository;
         this.anomalyRepository = anomalyRepository;
         this.overtimeRepository = overtimeRepository;
@@ -76,6 +83,8 @@ public class AttendanceService {
         this.monthlySummaryRepository = monthlySummaryRepository;
         this.notificationService = notificationService;
         this.approvalRoutingService = approvalRoutingService;
+        this.leaveRequestRepository = leaveRequestRepository;
+        this.approverViewFactory = approverViewFactory;
     }
 
     // ---------------------------------------------------------------- 출근
@@ -322,7 +331,7 @@ public class AttendanceService {
     @Transactional(readOnly = true)
     public List<OvertimeResponse> myOvertime(AuthPrincipal principal) {
         return overtimeRepository.findByUserIdOrderByIdDesc(principal.userId())
-                .stream().map(OvertimeResponse::from).toList();
+                .stream().map(r -> OvertimeResponse.from(r, null, buildOvertimeApprover(r))).toList();
     }
 
     @Transactional(readOnly = true)
@@ -330,7 +339,46 @@ public class AttendanceService {
         Map<Long, String> nameById = scopedUsers(principal).stream()
                 .collect(Collectors.toMap(User::getId, User::getName));
         return overtimeRepository.findByUserIdInAndStatusOrderByIdDesc(nameById.keySet().stream().toList(), OvertimeStatus.PENDING)
-                .stream().map(r -> OvertimeResponse.from(r, nameById.get(r.getUserId()))).toList();
+                .stream().map(r -> OvertimeResponse.from(r, nameById.get(r.getUserId()), buildOvertimeApprover(r)))
+                .toList();
+    }
+
+    /**
+     * 시간외 신청의 결재자 표현. PENDING → 팀장(부재 시 경영진 대행),
+     * APPROVED/REJECTED → 실제 처리자. 팀장 부재는 오늘자 승인 휴가로 판단.
+     */
+    private ApproverView buildOvertimeApprover(OvertimeRequest r) {
+        OvertimeStatus st = r.getStatus();
+        if (st == OvertimeStatus.APPROVED || st == OvertimeStatus.REJECTED) {
+            Long approverId = r.getApproverId();
+            if (approverId == null) {
+                return null;
+            }
+            Long manager = managerIdOf(r.getUserId());
+            boolean delegated = manager == null || !approverId.equals(manager);
+            Long absentId = (delegated && manager != null) ? manager : null;
+            return approverViewFactory.of(approverId, delegated, absentId);
+        }
+        // PENDING — 팀장이 결재. 팀장 부재 시 경영진이 대행.
+        Long manager = managerIdOf(r.getUserId());
+        if (manager != null && !isOnLeaveToday(manager)) {
+            return approverViewFactory.of(manager, false, null);
+        }
+        return approverViewFactory.of(anExecutiveId(), true, manager);
+    }
+
+    /** 오늘 승인된 휴가로 부재 중인가(시간외 대행 판단용). */
+    private boolean isOnLeaveToday(Long userId) {
+        return userId != null
+                && leaveRequestRepository.countActiveLeaveOn(userId, LocalDate.now(clock)) > 0;
+    }
+
+    /** 대행 대상 경영진 1인(VP 우선, 없으면 CEO). */
+    private Long anExecutiveId() {
+        List<User> execs = userRepository.findByRoleInAndStatus(List.of(Role.VP, Role.CEO), UserStatus.ACTIVE);
+        return execs.stream().filter(u -> u.getRole() == Role.VP).findFirst()
+                .or(() -> execs.stream().findFirst())
+                .map(User::getId).orElse(null);
     }
 
     @Transactional

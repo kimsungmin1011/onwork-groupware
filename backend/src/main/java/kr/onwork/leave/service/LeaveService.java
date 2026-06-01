@@ -13,8 +13,10 @@ import kr.onwork.common.domain.User;
 import kr.onwork.common.domain.UserStatus;
 import kr.onwork.common.error.BusinessException;
 import kr.onwork.common.error.ErrorCode;
+import kr.onwork.common.dto.ApproverView;
 import kr.onwork.common.repository.UserRepository;
 import kr.onwork.common.security.AuthPrincipal;
+import kr.onwork.common.service.ApproverViewFactory;
 import kr.onwork.leave.domain.LeaveApprover;
 import kr.onwork.leave.domain.LeaveBalance;
 import kr.onwork.leave.domain.LeaveChangeType;
@@ -52,6 +54,7 @@ public class LeaveService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final ApprovalRoutingService approvalRoutingService;
+    private final ApproverViewFactory approverViewFactory;
 
     public LeaveService(LeaveRequestRepository requestRepository,
                         LeaveBalanceRepository balanceRepository,
@@ -60,7 +63,8 @@ public class LeaveService {
                         LeaveHistoryRepository historyRepository,
                         UserRepository userRepository,
                         NotificationService notificationService,
-                        ApprovalRoutingService approvalRoutingService) {
+                        ApprovalRoutingService approvalRoutingService,
+                        ApproverViewFactory approverViewFactory) {
         this.requestRepository = requestRepository;
         this.balanceRepository = balanceRepository;
         this.typeRepository = typeRepository;
@@ -69,6 +73,7 @@ public class LeaveService {
         this.userRepository = userRepository;
         this.notificationService = notificationService;
         this.approvalRoutingService = approvalRoutingService;
+        this.approverViewFactory = approverViewFactory;
     }
 
     // ---------------------------------------------------------------- 잔여 조회
@@ -150,7 +155,7 @@ public class LeaveService {
     public List<LeaveRequestResponse> myRequests(AuthPrincipal principal) {
         String name = nameOf(principal.userId());
         return requestRepository.findByUserIdOrderByIdDesc(principal.userId()).stream()
-                .map(r -> LeaveRequestResponse.of(r, name)).toList();
+                .map(r -> LeaveRequestResponse.of(r, name, buildLeaveApprover(r))).toList();
     }
 
     @Transactional(readOnly = true)
@@ -168,8 +173,43 @@ public class LeaveService {
                         mine.stream().map(LeaveRequest::getUserId).distinct().toList()).stream()
                 .collect(Collectors.toMap(User::getId, User::getName));
         return mine.stream()
-                .map(r -> LeaveRequestResponse.of(r, nameById.getOrDefault(r.getUserId(), "?")))
+                .map(r -> LeaveRequestResponse.of(r, nameById.getOrDefault(r.getUserId(), "?"),
+                        buildLeaveApprover(r)))
                 .toList();
+    }
+
+    /**
+     * 신청 상태에 따라 결재자 표현을 산정한다.
+     * PENDING → 현재 유효 결재자 동적 산정(팀장 부재 시 대행자/경영진).
+     * APPROVED/ON_HOLD → 실제 처리자(자동 승인이면 시스템).
+     * CANCELLED → 결재자 없음(null).
+     */
+    private ApproverView buildLeaveApprover(LeaveRequest r) {
+        LeaveStatus st = r.getStatus();
+        if (st == LeaveStatus.CANCELLED) {
+            return null;
+        }
+        if (st == LeaveStatus.APPROVED || st == LeaveStatus.ON_HOLD) {
+            Long approverId = r.getApproverId();
+            if (approverId == null) {
+                return approverViewFactory.system();   // 자동 승인
+            }
+            Long teamLead = teamLeadId(r.getUserId());
+            Long absentId = (r.isDelegated() && teamLead != null && !teamLead.equals(approverId))
+                    ? teamLead : null;
+            return approverViewFactory.of(approverId, r.isDelegated(), absentId);
+        }
+        // PENDING — 현재 유효 결재자 실시간 산정
+        LeaveApprover la = approverOf(r.getUserId());
+        Long currentId = resolveActiveApprover(r.getUserId());
+        boolean delegated = la == null || (currentId != null && !currentId.equals(la.getApproverId()));
+        Long absentId = (delegated && la != null) ? la.getApproverId() : null;
+        return approverViewFactory.of(currentId, delegated, absentId);
+    }
+
+    private Long teamLeadId(Long requesterId) {
+        LeaveApprover la = approverOf(requesterId);
+        return la != null ? la.getApproverId() : null;
     }
 
     // ---------------------------------------------------------------- 승인 / 보류

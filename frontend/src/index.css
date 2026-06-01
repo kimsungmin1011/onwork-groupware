@@ -569,6 +569,20 @@ body {
 .grant-checklist label:hover { background: #f1f5f9; }
 .grant-checklist label.on { background: rgba(37, 99, 235, 0.08); font-weight: 700; }
 .grant-checklist .dept { color: var(--color-text-muted); font-size: 0.78rem; }
+
+/* 결재자 셀 (휴가·시간외 내역 공용) */
+.approver-cell { display: flex; flex-direction: column; gap: 1px; line-height: 1.35; }
+.approver-line { font-weight: 600; font-size: 0.86rem; display: inline-flex; align-items: center; gap: 6px; }
+.approver-line.tone-ok { color: #15803d; }
+.approver-line.tone-pending { color: #b45309; }
+.approver-line.tone-hold { color: #6b7280; }
+.approver-line.tone-rej { color: #b91c1c; }
+.approver-line.tone-muted { color: var(--color-text-muted); }
+.approver-sub { color: var(--color-text-muted); font-size: 0.74rem; }
+.tag-delegate {
+  font-size: 0.66rem; font-weight: 700; color: #6d28d9;
+  background: rgba(124, 58, 237, 0.12); border-radius: 999px; padding: 1px 7px; letter-spacing: 0.2px;
+}
 .dashboard-secondary-link {
   border: 1px solid rgba(100, 116, 139, 0.28);
   background: rgba(255, 255, 255, 0.74);
