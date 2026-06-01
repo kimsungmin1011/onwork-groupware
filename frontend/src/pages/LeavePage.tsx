@@ -52,7 +52,8 @@ export default function LeavePage() {
   const [form, setForm] = useState({ leaveTypeId: 1, startDate: '', endDate: '', reason: '' })
   const [error, setError] = useState('')
   const [employees, setEmployees] = useState<Employee[]>([])
-  const [grantForm, setGrantForm] = useState({ userId: '', days: '1', reason: '' })
+  const [grantTargets, setGrantTargets] = useState<Set<number>>(new Set())
+  const [grantForm, setGrantForm] = useState({ days: '1', reason: '' })
   const [grantMsg, setGrantMsg] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -113,24 +114,47 @@ export default function LeavePage() {
     await load()
   }
 
-  // 경영진 보상휴가 부여 (UC-LEAVE-03, POST /leave-grants, VP+)
+  // 대상 직원 다중/팀 선택 토글
+  function toggleGrantUser(id: number) {
+    setGrantTargets((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  function toggleGrantTeam(team: string) {
+    const ids = employees.filter((emp) => (emp.departmentName ?? '미분류') === team).map((emp) => emp.id)
+    setGrantTargets((prev) => {
+      const next = new Set(prev)
+      const allOn = ids.every((id) => next.has(id))
+      ids.forEach((id) => (allOn ? next.delete(id) : next.add(id)))
+      return next
+    })
+  }
+  function toggleGrantAll() {
+    setGrantTargets((prev) => (prev.size === employees.length ? new Set() : new Set(employees.map((e) => e.id))))
+  }
+
+  // 경영진 보상휴가 부여 (UC-LEAVE-03, POST /leave-grants, VP+). 다중·팀 단위 부여 가능.
   async function submitGrant(e: FormEvent) {
     e.preventDefault()
     setGrantMsg(null)
     const days = Number(grantForm.days)
-    if (!grantForm.userId || !(days >= 0.5)) {
-      setGrantMsg('대상 직원과 0.5일 이상의 일수를 입력하세요')
+    const ids = [...grantTargets]
+    if (ids.length === 0 || !(days >= 0.5)) {
+      setGrantMsg('대상 직원을 1명 이상 선택하고 0.5일 이상을 입력하세요')
       return
     }
     try {
-      const target = employees.find((emp) => String(emp.id) === grantForm.userId)
-      await api.post('/leave-grants', {
-        userIds: [Number(grantForm.userId)],
+      const { data } = await api.post<{ successCount: number; failureCount: number; total: number }>('/leave-grants', {
+        userIds: ids,
         days,
         reason: grantForm.reason || null,
       })
-      setGrantMsg(`${target?.name ?? '직원'}에게 보상휴가 ${days}일 부여 완료`)
-      setGrantForm({ userId: '', days: '1', reason: '' })
+      setGrantMsg(`보상휴가 ${days}일 부여 — 성공 ${data.successCount}명${data.failureCount ? ` / 실패 ${data.failureCount}명` : ''} (총 ${data.total}명)`)
+      setGrantTargets(new Set())
+      setGrantForm({ days: '1', reason: '' })
       await load()
     } catch (err) {
       setGrantMsg((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '부여 실패')
@@ -148,6 +172,7 @@ export default function LeavePage() {
   const compUsePercent = balanceUsePercent(comp)
   const pendingMine = mine.filter((item) => item.status === 'PENDING' || item.status === 'ON_HOLD').length
   const approvedMine = mine.filter((item) => item.status === 'APPROVED').length
+  const grantTeams = [...new Set(employees.map((e) => e.departmentName ?? '미분류'))]
 
   return (
     <AppLayout>
@@ -208,9 +233,12 @@ export default function LeavePage() {
               <select value={form.leaveTypeId} onChange={(e) => setForm({ ...form, leaveTypeId: Number(e.target.value) })}>
                 {LEAVE_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
               </select>
-              <input type="date" value={form.startDate} required onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
-              <input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })}
-                     required={!isHalfDay} disabled={isHalfDay} placeholder="종료일" />
+              <input type="date" value={form.startDate} required onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+                     title={isHalfDay ? '반차 신청일' : '시작일'} />
+              <input type="date" value={isHalfDay ? form.startDate : form.endDate}
+                     onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+                     required={!isHalfDay} disabled={isHalfDay}
+                     title={isHalfDay ? '반차는 당일만 신청합니다' : '종료일'} placeholder="종료일" />
               <input type="text" value={form.reason} placeholder="사유" onChange={(e) => setForm({ ...form, reason: e.target.value })} />
               <button className="btn-primary" type="submit">신청</button>
             </form>
@@ -246,22 +274,35 @@ export default function LeavePage() {
           <div className="panel-heading">
             <div>
               <h2>보상휴가 부여</h2>
-              <p>경영진 전용 — 선택한 직원에게 보상휴가를 즉시 부여합니다(결재 불필요).</p>
+              <p>경영진 전용 — 여러 직원 또는 팀 단위로 보상휴가를 부여합니다(결재 불필요).</p>
             </div>
+            <span className="count-chip">선택 {grantTargets.size}명</span>
           </div>
           <form className="pro-form" onSubmit={submitGrant}>
-            <label className="field" style={{ gridColumn: '1 / -1' }}>
-              <span>대상 직원</span>
-              <select required value={grantForm.userId}
-                      onChange={(e) => setGrantForm({ ...grantForm, userId: e.target.value })}>
-                <option value="">직원 선택</option>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <span className="field" style={{ marginBottom: 6, display: 'block' }}>대상 직원 (팀 단위 선택 가능)</span>
+              <div className="grant-teams">
+                <button type="button" className={`grant-team-btn${grantTargets.size === employees.length && employees.length > 0 ? ' on' : ''}`} onClick={toggleGrantAll}>전체</button>
+                {grantTeams.map((team) => {
+                  const ids = employees.filter((emp) => (emp.departmentName ?? '미분류') === team).map((emp) => emp.id)
+                  const allOn = ids.length > 0 && ids.every((id) => grantTargets.has(id))
+                  return (
+                    <button key={team} type="button" className={`grant-team-btn${allOn ? ' on' : ''}`} onClick={() => toggleGrantTeam(team)}>
+                      {team}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="grant-checklist">
                 {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name}{emp.departmentName ? ` · ${emp.departmentName}` : ''}
-                  </option>
+                  <label key={emp.id} className={grantTargets.has(emp.id) ? 'on' : ''}>
+                    <input type="checkbox" checked={grantTargets.has(emp.id)} onChange={() => toggleGrantUser(emp.id)} />
+                    <span>{emp.name}</span>
+                    <span className="dept">{emp.departmentName ?? '미분류'}</span>
+                  </label>
                 ))}
-              </select>
-            </label>
+              </div>
+            </div>
             <label className="field">
               <span>부여 일수</span>
               <input type="number" min="0.5" step="0.5" required value={grantForm.days}
@@ -272,7 +313,9 @@ export default function LeavePage() {
               <input type="text" placeholder="예: 휴일 근무 보상" value={grantForm.reason}
                      onChange={(e) => setGrantForm({ ...grantForm, reason: e.target.value })} />
             </label>
-            <button className="btn-primary" type="submit" style={{ gridColumn: '1 / -1' }}>보상휴가 부여</button>
+            <button className="btn-primary" type="submit" style={{ gridColumn: '1 / -1' }} disabled={grantTargets.size === 0}>
+              {grantTargets.size > 0 ? `${grantTargets.size}명에게 보상휴가 부여` : '보상휴가 부여'}
+            </button>
           </form>
           {grantMsg && <p className="toast-line">{grantMsg}</p>}
         </section>

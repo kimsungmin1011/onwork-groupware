@@ -132,13 +132,13 @@ public class LeaveService {
         return LeaveRequestResponse.of(saved, nameOf(principal.userId()));
     }
 
-    /** 자동 승인 조건: 반차(0.5일) 또는 1일 이하 연차 + 시작일 3일 이상 여유(긴급/당일 제외). 보상휴가 제외. */
+    /** 자동 승인 조건: 1일 이하 연차 + 시작일 3일 이상 여유(긴급/당일 제외). 보상휴가·반차는 결재 필요. */
     private boolean isAutoApprovable(LeaveType type, BigDecimal daysUsed, LocalDate startDate) {
         if (type.isComp()) {
             return false;
         }
         if (type.isHalfDay()) {
-            return true;
+            return false;   // 반차도 결재 대상(자동 승인 안 함)
         }
         boolean shortAnnual = daysUsed.compareTo(BigDecimal.ONE) <= 0;
         boolean farEnough = !startDate.isBefore(LocalDate.now().plusDays(3));
