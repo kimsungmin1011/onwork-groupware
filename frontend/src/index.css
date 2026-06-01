@@ -490,6 +490,13 @@ body {
   box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22);
 }
 .dashboard-primary-link:hover { background: #1d4ed8; }
+.dashboard-primary-link:disabled { opacity: 0.6; cursor: progress; }
+.dashboard-clock-msg {
+  margin-top: 10px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
 .dashboard-secondary-link {
   border: 1px solid rgba(100, 116, 139, 0.28);
   background: rgba(255, 255, 255, 0.74);

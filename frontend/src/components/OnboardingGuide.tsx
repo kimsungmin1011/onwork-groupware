@@ -175,22 +175,30 @@ export default function OnboardingGuide({ onSetNotificationsOpen }: Props) {
     return () => window.removeEventListener('onwork:tutorial-restart', onRestart)
   }, [restartTutorial])
 
+  // 자동 노출은 첫 방문(NOT_STARTED)에서만. 진행 중(IN_PROGRESS) 투어는
+  // 이번 세션에 사용자가 직접 시작/재개한 경우(sessionActive)에만 보여준다.
+  // 그렇지 않으면 이전 세션에 남은 IN_PROGRESS 기록이 매 로그인마다 화면을
+  // 가로채는 문제가 생긴다. (재개는 "가이드 보기"로)
   const isVisible = tutorial
     && !tutorial.expired
     && !['COMPLETED', 'DISMISSED'].includes(tutorial.status)
-    && (sessionActive || tutorial.autoVisible)
+    && (sessionActive || (tutorial.autoVisible && tutorial.status === 'NOT_STARTED'))
   const activeIndex = Math.min(Math.max(tutorial?.currentStep ?? 0, 0), Math.max(steps.length - 1, 0))
   const activeStep = steps[activeIndex]
   const introLastSurface = isApprover(user?.role) ? '결재함' : `${hrSurfaceLabel(user?.role)} 화면`
 
   useEffect(() => {
-    if (!tutorial || tutorial.status !== 'IN_PROGRESS' || !activeStep) return
+    // 투어가 이번 세션에 활성화된 경우에만 화면을 자동 이동시킨다.
+    // sessionActive 가드가 없으면 남아있는 IN_PROGRESS 기록이 로그인 때마다
+    // 사용자를 해당 스텝 화면(예: 결재함)으로 강제 이동시킨다.
+    if (!sessionActive || !tutorial || tutorial.status !== 'IN_PROGRESS' || !activeStep) return
     if (location.pathname !== activeStep.route) {
       navigate(activeStep.route)
       return
     }
     onSetNotificationsOpen(activeStep.action === 'notifications')
   }, [
+    sessionActive,
     activeStep,
     location.pathname,
     navigate,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import { api } from '../lib/api'
@@ -144,21 +144,36 @@ function restartTutorial() {
 export default function DashboardPage() {
   const { user } = useAuth()
   const [s, setS] = useState<Summary | null>(null)
+  const [clocking, setClocking] = useState(false)
+  const [clockMsg, setClockMsg] = useState<string | null>(null)
   const managerUp = isApprover(user?.role)
 
-  useEffect(() => {
-    let active = true
-    api.get<Summary>('/dashboard/summary')
-      .then((r) => {
-        if (active) setS(r.data)
-      })
-      .catch(() => {
-        if (active) setS(null)
-      })
-    return () => {
-      active = false
-    }
+  const load = useCallback(() => {
+    return api.get<Summary>('/dashboard/summary')
+      .then((r) => setS(r.data))
+      .catch(() => setS(null))
   }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  // 메인 화면에서 바로 출근/퇴근 (출근하기 → POST clock-in, 퇴근하기 → PATCH clock-out)
+  async function handleClock(kind: 'clock-in' | 'clock-out') {
+    setClocking(true)
+    setClockMsg(null)
+    try {
+      if (kind === 'clock-out') await api.patch('/attendance/clock-out')
+      else await api.post('/attendance/clock-in')
+      await load()
+      setClockMsg(kind === 'clock-in' ? '출근 완료 — 좋은 하루 되세요!' : '퇴근 완료 — 오늘도 수고하셨습니다!')
+    } catch (err) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setClockMsg(msg ?? '처리에 실패했습니다')
+    } finally {
+      setClocking(false)
+    }
+  }
 
   const attendanceText = !s ? '-' : s.clockOutAt ? '퇴근 완료' : s.clockedIn ? '근무 중' : '미출근'
   const tone = attendanceTone(s)
@@ -166,8 +181,6 @@ export default function DashboardPage() {
   const pendingCount = s?.pendingApprovals ?? 0
   const unreadCount = s?.unreadNotifications ?? 0
   const anomalyCount = s?.teamAnomaliesToday ?? 0
-  const primaryHref = managerUp && pendingCount > 0 ? '/approvals' : '/attendance'
-  const primaryLabel = managerUp && pendingCount > 0 ? '결재함 확인' : '근태 기록'
   const focusText = pendingCount > 0
     ? `${pendingCount}건의 결재가 대기 중입니다.`
     : unreadCount > 0
@@ -233,9 +246,22 @@ export default function DashboardPage() {
             <h1>안녕하세요, {s?.userName ?? user?.name ?? ''}님</h1>
             <p>{focusText}</p>
             <div className="dashboard-hero-actions">
-              <Link className="dashboard-primary-link" to={primaryHref}>{primaryLabel}</Link>
+              {attendanceText === '미출근' ? (
+                <button className="dashboard-primary-link" type="button" disabled={!s || clocking} onClick={() => handleClock('clock-in')}>
+                  {clocking ? '출근 처리 중…' : '출근하기'}
+                </button>
+              ) : attendanceText === '근무 중' ? (
+                <button className="dashboard-primary-link" type="button" disabled={clocking} onClick={() => handleClock('clock-out')}>
+                  {clocking ? '퇴근 처리 중…' : '퇴근하기'}
+                </button>
+              ) : (
+                <Link className="dashboard-primary-link" to={managerUp && pendingCount > 0 ? '/approvals' : '/attendance'}>
+                  {managerUp && pendingCount > 0 ? '결재함 확인' : '근태 보기'}
+                </Link>
+              )}
               <button className="dashboard-secondary-link" type="button" onClick={restartTutorial}>가이드 보기</button>
             </div>
+            {clockMsg && <p className="dashboard-clock-msg" role="status">{clockMsg}</p>}
           </div>
 
           <div className={`today-card tone-${tone}`}>
